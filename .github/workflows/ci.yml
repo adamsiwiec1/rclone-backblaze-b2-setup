@@ -1,0 +1,127 @@
+name: tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  # ------------------------------------------------------------------
+  # connect.sh -- lint, then behaviour on both bash generations.
+  # macOS still ships bash 3.2, so it is tested explicitly rather than
+  # assumed to behave like bash 5.
+  # ------------------------------------------------------------------
+  shell:
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            name: linux (bash 5)
+            bash: bash
+          - os: macos-latest
+            name: macos (bash 5)
+            bash: bash
+          - os: macos-latest
+            name: macos (bash 3.2)
+            bash: /bin/bash
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install rclone
+        run: |
+          if [ "$RUNNER_OS" = "macOS" ]; then
+            brew install rclone
+          else
+            sudo -v && curl -fsSL https://rclone.org/install.sh | sudo bash
+          fi
+          rclone version
+
+      - name: Report bash version under test
+        run: ${{ matrix.bash }} -c 'echo "$BASH_VERSION"'
+
+      - name: shellcheck
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq shellcheck
+          shellcheck --severity=warning --shell=bash connect.sh
+
+      - name: Syntax check
+        run: ${{ matrix.bash }} -n connect.sh
+
+      - name: Behaviour
+        env:
+          # Never touch the runner's real rclone config.
+          RCLONE_CONFIG: ${{ runner.temp }}/ci-rclone.conf
+        run: ${{ matrix.bash }} ./.github/smoke.sh ./connect.sh
+
+  # ------------------------------------------------------------------
+  # connect.ps1 -- parse, analyse, then behaviour. Windows PowerShell 5.1
+  # is tested alongside PowerShell 7 because Set-StrictMode and native
+  # stderr redirection differ between them.
+  # ------------------------------------------------------------------
+  powershell:
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            name: windows (PowerShell 5.1)
+            shell: powershell
+          - os: windows-latest
+            name: windows (PowerShell 7)
+            shell: pwsh
+          - os: ubuntu-latest
+            name: linux (PowerShell 7)
+            shell: pwsh
+    defaults:
+      run:
+        shell: ${{ matrix.shell }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install rclone
+        run: |
+          if ($env:RUNNER_OS -eq 'Windows') { choco install rclone -y --no-progress }
+          else { curl -fsSL https://rclone.org/install.sh | sudo bash }
+          rclone version
+
+      - name: Report PowerShell version under test
+        run: $PSVersionTable.PSVersion.ToString()
+
+      - name: Parse check
+        run: |
+          $errs = $null
+          [System.Management.Automation.Language.Parser]::ParseFile(
+            (Resolve-Path ./connect.ps1).Path, [ref]$null, [ref]$errs) | Out-Null
+          if ($errs) {
+            $errs | ForEach-Object {
+              Write-Host "::error file=connect.ps1,line=$($_.Extent.StartLineNumber)::$($_.Message)"
+            }
+            exit 1
+          }
+          Write-Host 'no parse errors'
+
+      - name: PSScriptAnalyzer
+        run: |
+          Install-Module PSScriptAnalyzer -Force -Scope CurrentUser -SkipPublisherCheck
+          $r = Invoke-ScriptAnalyzer -Path ./connect.ps1 -Severity Error,Warning
+          # PSAvoidUsingWriteHost is excluded on purpose: this script's entire job
+          # is to print a readable report to a human at a terminal, which is the
+          # one case Write-Host is correct for.
+          $r = $r | Where-Object { $_.RuleName -ne 'PSAvoidUsingWriteHost' }
+          if ($r) { $r | Format-Table -AutoSize | Out-String | Write-Host; exit 1 }
+          Write-Host 'clean'
+
+      - name: Behaviour
+        env:
+          RCLONE_CONFIG: ${{ runner.temp }}/ci-rclone.conf
+        run: ./.github/smoke.ps1 -Script ./connect.ps1

@@ -1,0 +1,15 @@
+# rclone configs must never be committed: they hold your B2 application key in
+# plaintext.
+rclone.conf
+*.conf
+!*.example.conf
+
+# Scratch output from local test runs
+*.log
+/tmp/
+scratch/
+
+# OS noise
+.DS_Store
+Thumbs.db
+desktop.ini
