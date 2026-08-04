@@ -1,5 +1,9 @@
 # rclone + Backblaze B2 setup
 
+[![tests](https://github.com/adamsiwiec1/rclone-backblaze-b2-setup/actions/workflows/ci.yml/badge.svg)](https://github.com/adamsiwiec1/rclone-backblaze-b2-setup/actions/workflows/ci.yml)
+[![license: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+![platforms: macOS | Linux | Windows](https://img.shields.io/badge/platforms-macOS%20%7C%20Linux%20%7C%20Windows-lightgrey)
+
 One script that connects [rclone](https://rclone.org) to [Backblaze B2](https://www.backblaze.com/cloud-storage) and proves the connection actually works. Runs on **macOS, Linux and Windows**.
 
 Setting up rclone for B2 is normally a walk through `rclone config`'s interactive menu — about twenty keystrokes and a couple of questions whose right answer is not obvious. This does the same thing in one command, then does the part `rclone config` never does: checks that the credentials can really read *and write* the bucket, and tells you plainly if they can't.
