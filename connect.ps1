@@ -87,8 +87,14 @@ function Exit-WithError {
 }
 
 function Confirm-Action {
-    param([string]$Question)
-    if ($Yes) { return $true }
+    # AssumeYes is passed in rather than read from the caller's $Yes. PowerShell's
+    # dynamic scoping would make that work, but a prompt helper that silently
+    # stops prompting because of a variable defined somewhere else is a trap.
+    param(
+        [Parameter(Mandatory = $true)][string] $Question,
+        [bool] $AssumeYes
+    )
+    if ($AssumeYes) { return $true }
     # A redirected or absent stdin cannot answer, so do not hang waiting.
     if ([Console]::IsInputRedirected) {
         Write-Warn 'input is redirected and -Yes not given, assuming no'
@@ -162,7 +168,7 @@ else {
     Write-Plain '  Suggested install command for this machine:'
     Write-Plain "    $($installer.Label)"
     Write-Plain ''
-    if (-not (Confirm-Action 'Run that now?')) {
+    if (-not (Confirm-Action -Question 'Run that now?' -AssumeYes $Yes)) {
         Exit-WithError 'rclone is required. Install it and re-run.'
     }
 
@@ -208,7 +214,7 @@ if ($listed -contains "${Remote}:") {
         Write-Plain "  A remote called '$Remote' already exists (type $existingType)."
         Write-Plain '  Re-running will overwrite its keys.'
         Write-Plain ''
-        if (-not (Confirm-Action 'Overwrite it?')) {
+        if (-not (Confirm-Action -Question 'Overwrite it?' -AssumeYes $Yes)) {
             Exit-WithError "nothing changed. Use -Remote NAME to set up a different one."
         }
     }

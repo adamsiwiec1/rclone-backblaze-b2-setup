@@ -112,7 +112,11 @@ jobs:
 
       - name: PSScriptAnalyzer
         run: |
-          Install-Module PSScriptAnalyzer -Force -Scope CurrentUser -SkipPublisherCheck
+          # Runners ship it already; installing over the loaded copy just warns.
+          if (-not (Get-Module -ListAvailable PSScriptAnalyzer)) {
+            Install-Module PSScriptAnalyzer -Force -Scope CurrentUser -SkipPublisherCheck
+          }
+          Import-Module PSScriptAnalyzer
           $r = Invoke-ScriptAnalyzer -Path ./connect.ps1 -Severity Error,Warning
           # PSAvoidUsingWriteHost is excluded on purpose: this script's entire job
           # is to print a readable report to a human at a terminal, which is the
